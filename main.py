@@ -3,6 +3,7 @@ import pandas as pd
 import plotly.express as px
 from datetime import date
 from streamlit_gsheets import GSheetsConnection
+import gspread
 
 # 1. CONFIGURAÇÃO DA PÁGINA
 st.set_page_config(page_title="Brechó Que Mimo Kids", page_icon="🧸", layout="wide")
@@ -14,9 +15,16 @@ PALETA_CORES = ["#E6007E", "#FFCC00", "#00A8E8", "#6BBF59", "#FF6B35"]
 # Cria a conexão nativa com o Google Sheets
 conn = st.connection("gsheets", type=GSheetsConnection)
 
+# 2. CONFIGURAÇÃO DO BANCO DE DADOS (GOOGLE SHEETS)
+import gspread
+
+# Cria a conexão nativa com o Google Sheets (usada para LER os dados rapidamente)
+conn = st.connection("gsheets", type=GSheetsConnection)
+URL_PLANILHA = st.secrets["connections"]["gsheets"]["spreadsheet"]
+
 def carregar_dados():
     try:
-        # ttl=0 limpa o cache para sempre trazer os dados mais recentes do telemóvel
+        # ttl=0 limpa o cache para sempre trazer os dados mais recentes do celular
         df = conn.read(ttl=0)
         if df.empty or "Produto" not in df.columns:
             return pd.DataFrame(columns=["Produto", "Categoria", "Tamanho", "Data", "Forma de Pagamento", "Preço Unitário", "Quantidade", "Total"])
@@ -27,15 +35,31 @@ def carregar_dados():
     except Exception:
         return pd.DataFrame(columns=["Produto", "Categoria", "Tamanho", "Data", "Forma de Pagamento", "Preço Unitário", "Quantidade", "Total"])
 
-def salvar_dados(df_novo):
+def salvar_dados_via_gspread(nova_linha_dict):
     try:
-        # Converter coluna de data para texto para não quebrar o formato no Sheets
-        df_salvar = df_novo.copy()
-        df_salvar['Data'] = df_salvar['Data'].astype(str)
-        conn.update(data=df_salvar)
-        st.cache_data.clear()  # Limpa cache do Streamlit para forçar nova leitura
+        # Conecta de forma pública na planilha que está como "Qualquer pessoa com o link pode editar"
+        gc = gspread.public()
+        sh = gc.open_by_url(URL_PLANILHA)
+        ws = sh.get_worksheet(0) # Abre a primeira aba
+        
+        # Transforma o dicionário em uma lista ordenada para o Google Sheets
+        valores = [
+            nova_linha_dict["Produto"],
+            nova_linha_dict["Categoria"],
+            nova_linha_dict["Tamanho"],
+            str(nova_linha_dict["Data"]),
+            nova_linha_dict["Forma de Pagamento"],
+            float(nova_linha_dict["Preço Unitário"]),
+            int(nova_linha_dict["Quantidade"]),
+            float(nova_linha_dict["Total"])
+        ]
+        
+        # Adiciona a nova linha no final da planilha instantaneamente sem precisar de chaves secretas!
+        ws.append_row(valores)
+        st.cache_data.clear()  # Limpa o cache do Streamlit
     except Exception as e:
         st.error(f"Erro ao salvar dados no Google Sheets: {e}")
+
 
 df_vendas = carregar_dados()
 
@@ -209,7 +233,7 @@ elif aba == "🛍️ Registrar Nova Venda":
             if produto == "" or preco_unitario == 0:
                 st.error("Por favor, preencha o nome do produto e o valor da peça!")
             else:
-                nova_venda = pd.DataFrame([{
+                dados_venda = {
                     "Produto": produto,
                     "Categoria": categoria,
                     "Tamanho": tamanho,
@@ -218,11 +242,13 @@ elif aba == "🛍️ Registrar Nova Venda":
                     "Preço Unitário": preco_unitario,
                     "Quantidade": quantidade,
                     "Total": total_item
-                }])
+                }
                 
-                df_atual = carregar_dados()
-                df_atualizado = pd.concat([df_atual, nova_venda], ignore_index=True)
-                salvar_dados(df_atualizado)
+               # df_atual = carregar_dados()
+               # df_atualizado = pd.concat([df_atual, nova_venda], ignore_index=True)
+               # salvar_dados(df_atualizado)
+                # CHAMA A FUNÇÃO NOVA QUE ADICIONAMOS VIA GSPREAD
+                salvar_dados_via_gspread(dados_venda)
                 
                 st.success("✅ Venda realizada com sucesso!")
                 st.balloons()
