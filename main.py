@@ -29,8 +29,9 @@ def carregar_dados():
 
 def salvar_dados_via_form(produto, categoria, tamanho, data, pagamento, preco, qtd, total):
     try:
-        # URL corrigida para o formato de submissão do Google Forms
-        url_form = "https://docs.google.com/forms/d/e/1FAIpQLSeiM6uK16MvO_6Yby2VjRbyy0FzDq0rI7v8eA3SstYxOun05A/formResponse"
+       try:
+        # URL EXATA DO SEU FORMULÁRIO CORRIGIDA PARA CORRER EM SEGUNDO PLANO:
+        url_form = "https://docs.google.com/forms/d/e/1FAIpQLSdO7i2fK6B0tEskv9jH8D4W6Lw0W8EpxOun05A/formResponse"
         
         # Mapeamento com os IDs reais extraídos
         dados_envio = {
