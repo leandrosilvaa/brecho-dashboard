@@ -3,7 +3,6 @@ import pandas as pd
 import plotly.express as px
 from datetime import date
 from streamlit_gsheets import GSheetsConnection
-import gspread
 
 # 1. CONFIGURAÇÃO DA PÁGINA
 st.set_page_config(page_title="Brechó Que Mimo Kids", page_icon="🧸", layout="wide")
@@ -11,20 +10,13 @@ st.set_page_config(page_title="Brechó Que Mimo Kids", page_icon="🧸", layout=
 # Cores do Logo para usar nos gráficos
 PALETA_CORES = ["#E6007E", "#FFCC00", "#00A8E8", "#6BBF59", "#FF6B35"]
 
-# 2. CONFIGURAÇÃO DO BANCO DE DADOS (GOOGLE SHEETS)
-# Cria a conexão nativa com o Google Sheets
-conn = st.connection("gsheets", type=GSheetsConnection)
-
-# 2. CONFIGURAÇÃO DO BANCO DE DADOS (GOOGLE SHEETS)
-import gspread
-
-# Cria a conexão nativa com o Google Sheets (usada para LER os dados rapidamente)
+# 2. CONFIGURAÇÃO DO BANCO DE DADOS (GOOGLE SHEETS - MÉTODO OFICIAL)
 conn = st.connection("gsheets", type=GSheetsConnection)
 URL_PLANILHA = st.secrets["connections"]["gsheets"]["spreadsheet"]
 
 def carregar_dados():
     try:
-        # ttl=0 limpa o cache para sempre trazer os dados mais recentes do celular
+        # ttl=0 garante que os dados salvos apareçam imediatamente
         df = conn.read(ttl=0)
         if df.empty or "Produto" not in df.columns:
             return pd.DataFrame(columns=["Produto", "Categoria", "Tamanho", "Data", "Forma de Pagamento", "Preço Unitário", "Quantidade", "Total"])
@@ -35,32 +27,21 @@ def carregar_dados():
     except Exception:
         return pd.DataFrame(columns=["Produto", "Categoria", "Tamanho", "Data", "Forma de Pagamento", "Preço Unitário", "Quantidade", "Total"])
 
-def salvar_dados_via_gspread(nova_linha_dict):
+def salvar_dados_definitivo(novo_df_linha):
     try:
-        # Conecta de forma pública na planilha que está como "Qualquer pessoa com o link pode editar"
-        gc = gspread.public()
-        sh = gc.open_by_url(URL_PLANILHA)
-        ws = sh.get_worksheet(0) # Abre a primeira aba
+        # 1. Carrega o histórico atual
+        df_atual = carregar_dados()
         
-        # Transforma o dicionário em uma lista ordenada para o Google Sheets
-        valores = [
-            nova_linha_dict["Produto"],
-            nova_linha_dict["Categoria"],
-            nova_linha_dict["Tamanho"],
-            str(nova_linha_dict["Data"]),
-            nova_linha_dict["Forma de Pagamento"],
-            float(nova_linha_dict["Preço Unitário"]),
-            int(nova_linha_dict["Quantidade"]),
-            float(nova_linha_dict["Total"])
-        ]
+        # 2. Junta os dados antigos com a nova linha preenchida no telemóvel
+        df_atualizado = pd.concat([df_atual, novo_df_linha], ignore_index=True)
         
-        # Adiciona a nova linha no final da planilha instantaneamente sem precisar de chaves secretas!
-        ws.append_row(valores)
-        st.cache_data.clear()  # Limpa o cache do Streamlit
+        # 3. Reescreve na planilha pública de forma segura e oficial
+        conn.update(spreadsheet=URL_PLANILHA, data=df_atualizado)
+        st.cache_data.clear()  # Limpa o cache para atualizar os gráficos instantaneamente
     except Exception as e:
         st.error(f"Erro ao salvar dados no Google Sheets: {e}")
 
-
+# Executa o carregamento inicial da tabela
 df_vendas = carregar_dados()
 
 # 3. ESTILIZAÇÃO PERSONALIZADA AVANÇADA (100% Responsivo para Telemóvel)
@@ -233,7 +214,8 @@ elif aba == "🛍️ Registrar Nova Venda":
             if produto == "" or preco_unitario == 0:
                 st.error("Por favor, preencha o nome do produto e o valor da peça!")
             else:
-                dados_venda = {
+                # Criamos a nova linha formatada como uma tabela DataFrame
+                nova_venda_df = pd.DataFrame([{
                     "Produto": produto,
                     "Categoria": categoria,
                     "Tamanho": tamanho,
@@ -242,13 +224,10 @@ elif aba == "🛍️ Registrar Nova Venda":
                     "Preço Unitário": preco_unitario,
                     "Quantidade": quantidade,
                     "Total": total_item
-                }
+                }])
                 
-               # df_atual = carregar_dados()
-               # df_atualizado = pd.concat([df_atual, nova_venda], ignore_index=True)
-               # salvar_dados(df_atualizado)
-                # CHAMA A FUNÇÃO NOVA QUE ADICIONAMOS VIA GSPREAD
-                salvar_dados_via_gspread(dados_venda)
+                # Salva os dados chamando o método oficial de atualização
+                salvar_dados_definitivo(nova_venda_df)
                 
                 st.success("✅ Venda realizada com sucesso!")
                 st.balloons()
