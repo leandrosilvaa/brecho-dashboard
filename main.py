@@ -29,29 +29,35 @@ def carregar_dados():
 
 def salvar_dados_via_form(produto, categoria, tamanho, data, pagamento, preco, qtd, total):
     try:
-        # URL de envio em segundo plano do seu formulário Google
+        # URL corrigida para o formato de submissão do Google Forms
         url_form = "https://docs.google.com/forms/d/e/1FAIpQLSeiM6uK16MvO_6Yby2VjRbyy0FzDq0rI7v8eA3SstYxOun05A/formResponse"
         
-        # Mapeamento com os IDs reais extraídos do seu link
+        # Mapeamento com os IDs reais extraídos
         dados_envio = {
             "entry.315053706": produto,
             "entry.682664360": categoria,
             "entry.1691238478": tamanho,
             "entry.88081622": str(data),
             "entry.449733471": pagamento,
-            "entry.1694297126": str(preco).replace('.', ','), # Padrão de número do Sheets BR
+            "entry.1694297126": str(preco).replace('.', ','), # Padrão decimal brasileiro para o Sheets
             "entry.1065403215": int(qtd),
             "entry.484250325": str(total).replace('.', ',')
         }
         
-        # Envia os dados para a planilha através do formulário de forma invisível
-        resposta = requests.post(url_form, data=dados_envio)
-        if resposta.status_code == 200:
-            st.cache_data.clear()  # Limpa o cache para atualizar o dashboard
+        # Enviamos permitindo redirecionamentos (allow_redirects=True) que é crucial para o Forms
+        resposta = requests.post(url_form, data=dados_envio, allow_redirects=True)
+        
+        # O Google Forms costuma retornar 200 quando processado diretamente via API
+        if resposta.ok:
+            st.cache_data.clear()  # Reseta o cache de leitura do Streamlit para forçar a atualização dos gráficos
+            return True
         else:
-            st.error(f"Erro na comunicação com o formulário. Código: {resposta.status_code}")
+            st.error(f"⚠️ O Google recebeu a tentativa de cadastro, mas retornou o código: {resposta.status_code}")
+            return False
+            
     except Exception as e:
-        st.error(f"Erro ao salvar dados no Google Sheets: {e}")
+        st.error(f"Erro crítico de conexão: {e}")
+        return False
 
 df_vendas = carregar_dados()
 
@@ -106,7 +112,7 @@ if aba == "📊 Dashboard de Vendas":
     st.title("📊 Painel de Indicadores")
     
     if df_vendas.empty:
-        st.info("Nenhuma venda registada ainda no Google Sheets. Vá ao menu 'Registrar Nova Venda' para começar!")
+        st.info("Nenhuma venda registrada ainda no Google Sheets. Vá ao menu 'Registrar Nova Venda' para começar!")
     else:
         # --- FILTROS TEMPORAIS ---
         st.markdown("### 📅 Filtrar Período de Visualização")
@@ -139,7 +145,7 @@ if aba == "📊 Dashboard de Vendas":
         st.markdown("---")
 
         if df_filtrado.empty:
-            st.warning(f"⚠️ Nenhuma venda registada para o período selecionado: '{opcao_periodo}'.")
+            st.warning(f"⚠️ Nenhuma venda registrada para o período selecionado: '{opcao_periodo}'.")
         else:
             faturamento_total = df_filtrado["Total"].sum()
             total_vendas = len(df_filtrado)
@@ -193,7 +199,7 @@ if aba == "📊 Dashboard de Vendas":
 # 6. ABA: FORMULÁRIO DE CADASTRO DE VENDA
 elif aba == "🛍️ Registrar Nova Venda":
     st.title("🛍️ Lançar Nova Venda")
-    st.markdown("Preencha os campos abaixo para registar o produto vendido.")
+    st.markdown("Preencha os campos abaixo para registrar o produto vendido.")
     
     bg_container = st.container(border=True)
     
@@ -225,9 +231,9 @@ elif aba == "🛍️ Registrar Nova Venda":
             if produto == "" or preco_unitario == 0:
                 st.error("Por favor, preencha o nome do produto e o valor da peça!")
             else:
-                # Chama a nova função estável enviando os campos individuais
-                salvar_dados_via_form(produto, categoria, tamanho, data_venda, forma_pagamento, preco_unitario, quantidade, total_item)
+                status_salvamento = salvar_dados_via_form(produto, categoria, tamanho, data_venda, forma_pagamento, preco_unitario, quantidade, total_item)
                 
-                st.success("✅ Venda realizada com sucesso!")
-                st.balloons()
-                st.rerun()
+                if status_salvamento:
+                    st.success("✅ Venda realizada com sucesso!")
+                    st.balloons()
+                    st.rerun()
