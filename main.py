@@ -36,7 +36,7 @@ def salvar_dados_definitivo(novo_df_linha):
         df_atualizado = pd.concat([df_atual, novo_df_linha], ignore_index=True)
         
         # 3. Reescreve na planilha pública de forma segura e oficial
-        conn.update(spreadsheet=URL_PLANILHA, data=df_atualizado)
+        conn.update(spreadsheet=URL_PLANILHA, data=df_atualizado, worksheet="Página1")
         st.cache_data.clear()  # Limpa o cache para atualizar os gráficos instantaneamente
     except Exception as e:
         st.error(f"Erro ao salvar dados no Google Sheets: {e}")
