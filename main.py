@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from datetime import date
+from datetime import date 
 from streamlit_gsheets import GSheetsConnection
 import requests
 
