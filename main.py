@@ -30,7 +30,7 @@ def carregar_dados():
 def salvar_dados_via_form(produto, categoria, tamanho, data, pagamento, preco, qtd, total):
     try:
         # URL EXATA DO SEU FORMULÁRIO CORRIGIDA PARA CORRER EM SEGUNDO PLANO:
-        url_form = "https://docs.google.com/forms/d/e/1FAIpQLSdO7i2fK6B0tEskv9jH8D4W6Lw0W8EpxOun05A/formResponse"
+        url_form = "https://docs.google.com/forms/d/1lqUD7hWSsEBHPX8NhZ6M1OwjwRmMYBkiONyJgoCbGqI/formResponse"
         
         # Mapeamento com os IDs reais extraídos
         dados_envio = {
