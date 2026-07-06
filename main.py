@@ -3,6 +3,7 @@ import pandas as pd
 import plotly.express as px
 from datetime import date
 from streamlit_gsheets import GSheetsConnection
+import requests
 
 # 1. CONFIGURAÇÃO DA PÁGINA
 st.set_page_config(page_title="Brechó Que Mimo Kids", page_icon="🧸", layout="wide")
@@ -10,13 +11,12 @@ st.set_page_config(page_title="Brechó Que Mimo Kids", page_icon="🧸", layout=
 # Cores do Logo para usar nos gráficos
 PALETA_CORES = ["#E6007E", "#FFCC00", "#00A8E8", "#6BBF59", "#FF6B35"]
 
-# 2. CONFIGURAÇÃO DO BANCO DE DADOS (GOOGLE SHEETS - MÉTODO OFICIAL)
+# 2. CONFIGURAÇÃO DO BANCO DE DADOS (GOOGLE SHEETS)
 conn = st.connection("gsheets", type=GSheetsConnection)
-URL_PLANILHA = st.secrets["connections"]["gsheets"]["spreadsheet"]
 
 def carregar_dados():
     try:
-        # ttl=0 garante que os dados salvos apareçam imediatamente
+        # ttl=0 limpa o cache para sempre trazer os dados mais recentes do celular
         df = conn.read(ttl=0)
         if df.empty or "Produto" not in df.columns:
             return pd.DataFrame(columns=["Produto", "Categoria", "Tamanho", "Data", "Forma de Pagamento", "Preço Unitário", "Quantidade", "Total"])
@@ -27,21 +27,32 @@ def carregar_dados():
     except Exception:
         return pd.DataFrame(columns=["Produto", "Categoria", "Tamanho", "Data", "Forma de Pagamento", "Preço Unitário", "Quantidade", "Total"])
 
-def salvar_dados_definitivo(novo_df_linha):
+def salvar_dados_via_form(produto, categoria, tamanho, data, pagamento, preco, qtd, total):
     try:
-        # 1. Carrega o histórico atual
-        df_atual = carregar_dados()
+        # URL de envio em segundo plano do seu formulário Google
+        url_form = "https://docs.google.com/forms/d/e/1FAIpQLSeiM6uK16MvO_6Yby2VjRbyy0FzDq0rI7v8eA3SstYxOun05A/formResponse"
         
-        # 2. Junta os dados antigos com a nova linha preenchida no telemóvel
-        df_atualizado = pd.concat([df_atual, novo_df_linha], ignore_index=True)
+        # Mapeamento com os IDs reais extraídos do seu link
+        dados_envio = {
+            "entry.315053706": produto,
+            "entry.682664360": categoria,
+            "entry.1691238478": tamanho,
+            "entry.88081622": str(data),
+            "entry.449733471": pagamento,
+            "entry.1694297126": str(preco).replace('.', ','), # Padrão de número do Sheets BR
+            "entry.1065403215": int(qtd),
+            "entry.484250325": str(total).replace('.', ',')
+        }
         
-        # 3. Reescreve na planilha pública de forma segura e oficial
-        conn.update(spreadsheet=URL_PLANILHA, data=df_atualizado, worksheet="Página1")
-        st.cache_data.clear()  # Limpa o cache para atualizar os gráficos instantaneamente
+        # Envia os dados para a planilha através do formulário de forma invisível
+        resposta = requests.post(url_form, data=dados_envio)
+        if resposta.status_code == 200:
+            st.cache_data.clear()  # Limpa o cache para atualizar o dashboard
+        else:
+            st.error(f"Erro na comunicação com o formulário. Código: {resposta.status_code}")
     except Exception as e:
         st.error(f"Erro ao salvar dados no Google Sheets: {e}")
 
-# Executa o carregamento inicial da tabela
 df_vendas = carregar_dados()
 
 # 3. ESTILIZAÇÃO PERSONALIZADA AVANÇADA (100% Responsivo para Telemóvel)
@@ -214,20 +225,8 @@ elif aba == "🛍️ Registrar Nova Venda":
             if produto == "" or preco_unitario == 0:
                 st.error("Por favor, preencha o nome do produto e o valor da peça!")
             else:
-                # Criamos a nova linha formatada como uma tabela DataFrame
-                nova_venda_df = pd.DataFrame([{
-                    "Produto": produto,
-                    "Categoria": categoria,
-                    "Tamanho": tamanho,
-                    "Data": data_venda,
-                    "Forma de Pagamento": forma_pagamento,
-                    "Preço Unitário": preco_unitario,
-                    "Quantidade": quantidade,
-                    "Total": total_item
-                }])
-                
-                # Salva os dados chamando o método oficial de atualização
-                salvar_dados_definitivo(nova_venda_df)
+                # Chama a nova função estável enviando os campos individuais
+                salvar_dados_via_form(produto, categoria, tamanho, data_venda, forma_pagamento, preco_unitario, quantidade, total_item)
                 
                 st.success("✅ Venda realizada com sucesso!")
                 st.balloons()
